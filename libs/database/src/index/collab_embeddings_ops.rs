@@ -5,9 +5,7 @@ use pgvector::Vector;
 use sqlx::{Error, Executor, Postgres, Transaction};
 use uuid::Uuid;
 
-use database_entity::dto::{
-  AFCollabEmbeddingParams, IndexingStatus, QueryCollab, QueryCollabParams,
-};
+use database_entity::dto::{AFCollabEmbeddingParams, IndexingStatus};
 
 pub async fn get_index_status<'a, E>(
   tx: E,
@@ -144,16 +142,4 @@ pub struct CollabId {
   pub collab_type: CollabType,
   pub workspace_id: Uuid,
   pub object_id: String,
-}
-
-impl From<CollabId> for QueryCollabParams {
-  fn from(value: CollabId) -> Self {
-    QueryCollabParams {
-      workspace_id: value.workspace_id.to_string(),
-      inner: QueryCollab {
-        object_id: value.object_id,
-        collab_type: value.collab_type,
-      },
-    }
-  }
 }

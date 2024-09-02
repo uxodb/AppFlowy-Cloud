@@ -17,9 +17,7 @@ use crate::collab::cache::CollabCache;
 use crate::command::{CLCommandSender, CollaborationCommand};
 use crate::shared_state::RealtimeSharedState;
 use app_error::AppError;
-use database::collab::{
-  AppResult, CollabMetadata, CollabStorage, CollabStorageAccessControl, GetCollabOrigin,
-};
+use database::collab::{AppResult, CollabMetadata, CollabStorage, CollabStorageAccessControl};
 use database_entity::dto::{
   AFAccessLevel, AFSnapshotMeta, AFSnapshotMetas, CollabParams, InsertSnapshotParams, QueryCollab,
   QueryCollabParams, QueryCollabResult, SnapshotData,
@@ -279,34 +277,30 @@ where
     Ok(())
   }
 
-  #[instrument(level = "trace", skip_all, fields(oid = %params.object_id, from_editing_collab = %from_editing_collab))]
+  #[instrument(level = "trace", skip_all, fields(oid = %params.object_id, is_collab_init = %is_collab_init))]
   async fn get_encode_collab(
     &self,
-    origin: GetCollabOrigin,
+    uid: &i64,
     params: QueryCollabParams,
-    from_editing_collab: bool,
+    is_collab_init: bool,
   ) -> AppResult<EncodedCollab> {
     params.validate()?;
-    match origin {
-      GetCollabOrigin::User { uid } => {
-        // Check if the user has enough permissions to access the collab
-        let can_read = self
-          .access_control
-          .enforce_read_collab(&params.workspace_id, &uid, &params.object_id)
-          .await?;
 
-        if !can_read {
-          return Err(AppError::NotEnoughPermissions {
-            user: uid.to_string(),
-            action: format!("read collab:{}", params.object_id),
-          });
-        }
-      },
-      GetCollabOrigin::Server => {},
+    // Check if the user has enough permissions to access the collab
+    let can_read = self
+      .access_control
+      .enforce_read_collab(&params.workspace_id, uid, &params.object_id)
+      .await?;
+
+    if !can_read {
+      return Err(AppError::NotEnoughPermissions {
+        user: uid.to_string(),
+        action: format!("read collab:{}", params.object_id),
+      });
     }
 
     // Early return if editing collab is initialized, as it indicates no need to query further.
-    if from_editing_collab {
+    if !is_collab_init {
       // Attempt to retrieve encoded collab from the editing collab
       if let Some(value) = self.get_encode_collab_from_editing(&params.object_id).await {
         trace!(
@@ -317,7 +311,7 @@ where
       }
     }
 
-    let encode_collab = self.cache.get_encode_collab(params.inner).await?;
+    let encode_collab = self.cache.get_encode_collab(uid, params.inner).await?;
     Ok(encode_collab)
   }
 

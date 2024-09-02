@@ -24,7 +24,7 @@ use authentication::jwt::{OptionalUserUuid, UserUuid};
 use collab_rt_entity::realtime_proto::HttpRealtimeMessage;
 use collab_rt_entity::RealtimeMessage;
 use collab_rt_protocol::validate_encode_collab;
-use database::collab::{CollabStorage, GetCollabOrigin};
+use database::collab::CollabStorage;
 use database::user::select_uid_from_email;
 use database_entity::dto::*;
 use shared_entity::dto::workspace_dto::*;
@@ -764,7 +764,7 @@ async fn get_collab_handler(
   let object_id = params.object_id.clone();
   let encode_collab = state
     .collab_access_control_storage
-    .get_encode_collab(GetCollabOrigin::User { uid }, params, true)
+    .get_encode_collab(&uid, params, false)
     .await
     .map_err(AppResponseError::from)?;
 
@@ -800,7 +800,7 @@ async fn v1_get_collab_handler(
 
   let encode_collab = state
     .collab_access_control_storage
-    .get_encode_collab(GetCollabOrigin::User { uid }, param, true)
+    .get_encode_collab(&uid, param, false)
     .await
     .map_err(AppResponseError::from)?;
 
@@ -845,9 +845,9 @@ async fn create_collab_snapshot_handler(
   let encoded_collab_v1 = state
     .collab_access_control_storage
     .get_encode_collab(
-      GetCollabOrigin::User { uid },
+      &uid,
       QueryCollabParams::new(&object_id, collab_type.clone(), &workspace_id),
-      true,
+      false,
     )
     .await?
     .encode_to_bytes()
@@ -920,27 +920,22 @@ async fn update_collab_handler(
       .can_index_workspace(&workspace_id)
       .await?
     {
-      let (encoded, mut mut_params) = tokio::task::spawn_blocking(move || {
-        EncodedCollab::decode_from_bytes(&params.encoded_collab_v1)
-          .map(|encoded_collab| (encoded_collab, params))
-          .map_err(|err| AppError::InvalidRequest(format!("Failed to decode collab `{}", err)))
-      })
-      .await
-      .map_err(|err| AppError::Internal(err.into()))??;
-
-      match indexer.index(&mut_params.object_id, encoded).await {
-        Ok(embeddings) => mut_params.embeddings = embeddings,
+      let encoded = EncodedCollab::decode_from_bytes(&params.encoded_collab_v1).map_err(|err| {
+        AppError::InvalidRequest(format!(
+          "Failed to decode collab `{}`: {}",
+          params.object_id, err
+        ))
+      })?;
+      match indexer.index(&params.object_id, encoded).await {
+        Ok(embeddings) => params.embeddings = embeddings,
         Err(err) => tracing::warn!(
           "failed to fetch embeddings for document {}: {}",
-          mut_params.object_id,
+          params.object_id,
           err
         ),
       }
-
-      params = mut_params;
     }
   }
-
   state
     .collab_access_control_storage
     .insert_or_update_collab(&workspace_id, &uid, params, false)

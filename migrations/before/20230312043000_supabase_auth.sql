@@ -32,6 +32,6 @@ END $$;
 -- Create auth schema if it does not exist
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;
 -- Grant permissions
-GRANT CREATE ON DATABASE postgres TO supabase_auth_admin;
+GRANT CREATE ON DATABASE appflowy TO supabase_auth_admin;
 -- Set search_path for supabase_auth_admin
 ALTER USER supabase_auth_admin SET search_path = 'auth';
