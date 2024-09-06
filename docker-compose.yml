@@ -22,6 +22,7 @@ services:
       - proxy
       - def01
     labels:
+      - traefik.enable=true
       - traefik.http.routers.appflowy.entrypoints=websecure
       - traefik.http.routers.appflowy.rule=Host(`${FQDN}`)
       - traefik.http.routers.appflowy.tls=true
